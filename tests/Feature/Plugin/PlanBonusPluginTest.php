@@ -23,7 +23,7 @@ class PlanBonusPluginTest extends TestCase
         // 启用插件：插件路由由全局中间件 InitializePlugins 在请求期注册
         Plugin::create([
             'name' => '套餐赠送时长管理',
-            'code' => 'plan-bonus',
+            'code' => 'plan_bonus',
             'version' => '1.0.0',
             'type' => Plugin::TYPE_FEATURE,
             'is_enabled' => true,
