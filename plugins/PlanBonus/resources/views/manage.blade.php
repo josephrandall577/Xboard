@@ -367,7 +367,10 @@
   document.getElementById('resetTokenBtn').addEventListener('click', resetToken);
 
   document.getElementById('tokenSubmit').addEventListener('click', function () {
-    var token = normalizeToken(document.getElementById('tokenInput').value);
+    var raw = (document.getElementById('tokenInput').value || '').trim();
+    // 容错：支持粘贴 Bearer 串、裸 token、localStorage 整段 JSON
+    var found = raw ? extractTokensFromValue(raw) : [];
+    var token = found.length ? normalizeToken(found[0]) : normalizeToken(raw);
     if (!token) { toast('请输入票据', true); return; }
     state.token = token;
     api('/plans').then(function (r) {
