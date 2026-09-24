@@ -15,7 +15,9 @@ class PlanBonusController extends Controller
      */
     public function page()
     {
-        return view('PlanBonus::manage');
+        return view('PlanBonus::manage', [
+            'securePath' => admin_setting('secure_path', admin_setting('frontend_admin_path', '')),
+        ]);
     }
 
     /**

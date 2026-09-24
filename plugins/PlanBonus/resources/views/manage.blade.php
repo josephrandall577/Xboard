@@ -92,9 +92,12 @@
 
 <script>
 (function () {
-  var API_BASE = '/api/plugin/plan-bonus';
+  // 直接复用管理面板 API（/api/v2/{secure_path}），避免独立路径被反代/防火墙拦截
+  var ADMIN_API = '/api/v2/' + @json($securePath);
   var TOKEN_KEY = 'plan_bonus_admin_token';
-  var state = { token: null, plans: [], periods: {}, maxBonus: 36 };
+  var PERIOD_LABELS = { monthly: '月付', quarterly: '季付', half_yearly: '半年付', yearly: '年付', two_yearly: '两年付', three_yearly: '三年付' };
+  var MAX_BONUS = 36;
+  var state = { token: null, plans: [] };
 
   var toastEl = document.getElementById('toast');
   function toast(msg, isError) {
@@ -181,7 +184,7 @@
       { 'Accept': 'application/json', 'Authorization': state.token },
       options.body ? { 'Content-Type': 'application/json' } : {}
     );
-    return fetch(API_BASE + path, options).then(function (resp) {
+    return fetch(ADMIN_API + path, options).then(function (resp) {
       return resp.json().catch(function () { return {}; }).then(function (body) {
         return { status: resp.status, body: body };
       });
@@ -194,12 +197,10 @@
     candidates.forEach(function (token) {
       chain = chain.catch(function () {
         state.token = token;
-        return api('/plans').then(function (r) {
+        return api('/plan/fetch').then(function (r) {
           if (r.status === 200) {
             try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
-            state.plans = (r.body.data && r.body.data.plans) || [];
-            state.periods = (r.body.data && r.body.data.periods) || {};
-            state.maxBonus = (r.body.data && r.body.data.max_bonus_months) || 36;
+            state.plans = Array.isArray(r.body.data) ? r.body.data : [];
             return true;
           }
           return Promise.reject(r.status);
@@ -237,10 +238,10 @@
       wrap.textContent = '暂无套餐，请先前往管理面板创建订阅套餐。';
       return;
     }
-    var periodKeys = Object.keys(state.periods);
+    var periodKeys = Object.keys(PERIOD_LABELS);
     var html = '<table><thead><tr><th>套餐</th>';
     periodKeys.forEach(function (p) {
-      html += '<th>' + esc(state.periods[p].name) + '<br><span class="muted">赠送(月)</span></th>';
+      html += '<th>' + esc(PERIOD_LABELS[p]) + '<br><span class="muted">赠送(月)</span></th>';
     });
     html += '<th>操作</th></tr></thead><tbody>';
 
@@ -258,7 +259,7 @@
           return;
         }
         var value = (plan.bonuses && plan.bonuses[period]) ? plan.bonuses[period] : '';
-        html += '<td><input class="bonus-input" type="number" min="0" max="' + state.maxBonus
+        html += '<td><input class="bonus-input" type="number" min="0" max="' + MAX_BONUS
           + '" step="1" data-period="' + esc(period) + '" value="' + esc(value) + '" placeholder="0"></td>';
       });
 
@@ -281,7 +282,7 @@
       var raw = input.value.trim();
       if (raw === '') return;
       var months = parseInt(raw, 10);
-      if (isNaN(months) || months < 0 || months > state.maxBonus) {
+      if (isNaN(months) || months < 0 || months > MAX_BONUS) {
         invalid = period;
         return;
       }
@@ -291,14 +292,25 @@
   }
 
   function savePlan(planId, bonuses) {
-    return api('/save', {
+    var plan = state.plans.find(function (p) { return p.id === planId; });
+    if (!plan) {
+      toast('套餐数据不存在', true);
+      return Promise.resolve();
+    }
+    // 管理面板 plan/save 要求完整字段，带上原值避免覆盖
+    var payload = {
+      id: planId,
+      name: plan.name,
+      transfer_enable: plan.transfer_enable,
+      prices: plan.prices || {},
+      bonuses: bonuses
+    };
+    return api('/plan/save', {
       method: 'POST',
-      body: JSON.stringify({ plan_id: planId, bonuses: bonuses })
+      body: JSON.stringify(payload)
     }).then(function (r) {
-      if (r.status === 200) {
-        var saved = r.body.data && r.body.data.bonuses;
-        var plan = state.plans.find(function (p) { return p.id === planId; });
-        if (plan) plan.bonuses = saved || {};
+      if (r.status === 200 && r.body && r.body.data) {
+        plan.bonuses = bonuses || {};
         renderTable();
         toast('已保存');
         return;
@@ -335,8 +347,8 @@
     if (btn.classList.contains('act-save')) {
       var result = readRowBonuses(row);
       if (result.invalid) {
-        toast('「' + (state.periods[result.invalid] ? state.periods[result.invalid].name : result.invalid)
-          + '」赠送月数无效（0～' + state.maxBonus + ' 的整数）', true);
+        toast('「' + (PERIOD_LABELS[result.invalid] || result.invalid)
+          + '」赠送月数无效（0～' + MAX_BONUS + ' 的整数）', true);
         return;
       }
       btn.disabled = true;
@@ -352,10 +364,9 @@
 
   document.getElementById('refreshBtn').addEventListener('click', function () {
     if (!state.token) { showTokenPanel(); return; }
-    api('/plans').then(function (r) {
+    api('/plan/fetch').then(function (r) {
       if (r.status === 200) {
-        state.plans = (r.body.data && r.body.data.plans) || [];
-        state.periods = (r.body.data && r.body.data.periods) || {};
+        state.plans = Array.isArray(r.body.data) ? r.body.data : [];
         renderTable();
       } else {
         toast('刷新失败（HTTP ' + r.status + '）', true);
@@ -373,12 +384,10 @@
     var token = found.length ? normalizeToken(found[0]) : normalizeToken(raw);
     if (!token) { toast('请输入票据', true); return; }
     state.token = token;
-    api('/plans').then(function (r) {
+    api('/plan/fetch').then(function (r) {
       if (r.status === 200) {
         try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
-        state.plans = (r.body.data && r.body.data.plans) || [];
-        state.periods = (r.body.data && r.body.data.periods) || {};
-        state.maxBonus = (r.body.data && r.body.data.max_bonus_months) || 36;
+        state.plans = Array.isArray(r.body.data) ? r.body.data : [];
         showApp();
       } else {
         toast('票据无效（HTTP ' + r.status + '），请确认是管理员账号的票据', true);
