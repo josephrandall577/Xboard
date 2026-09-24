@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property bool $renew 是否允许续费
  * @property bool $sell 是否允许购买
  * @property array|null $prices 价格配置
+ * @property array|null $bonuses 赠送时长配置(月)
  * @property array|null $tags 标签
  * @property int $sort 排序
  * @property string|null $content 套餐描述
@@ -73,6 +74,9 @@ class Plan extends Model
         'reset_price' => self::PERIOD_RESET_TRAFFIC
     ];
 
+    // 单个周期允许的最大赠送月数
+    public const MAX_BONUS_MONTHS = 36;
+
     protected $fillable = [
         'group_id',
         'transfer_enable',
@@ -83,6 +87,7 @@ class Plan extends Model
         'renew',
         'content',
         'prices',
+        'bonuses',
         'reset_traffic_method',
         'capacity_limit',
         'sell',
@@ -97,6 +102,7 @@ class Plan extends Model
         'updated_at' => 'timestamp',
         'group_id' => 'integer',
         'prices' => 'array',
+        'bonuses' => 'array',
         'tags' => 'array',
         'reset_traffic_method' => 'integer',
     ];
@@ -181,6 +187,91 @@ class Plan extends Model
     }
 
     /**
+     * 获取支持赠送时长的周期（排除一次性和重置流量）
+     *
+     * @return array<int, string>
+     */
+    public static function getBonusablePeriods(): array
+    {
+        return [
+            self::PERIOD_MONTHLY,
+            self::PERIOD_QUARTERLY,
+            self::PERIOD_HALF_YEARLY,
+            self::PERIOD_YEARLY,
+            self::PERIOD_TWO_YEARLY,
+            self::PERIOD_THREE_YEARLY,
+        ];
+    }
+
+    /**
+     * 检查周期是否支持赠送时长
+     *
+     * @param string $period
+     * @return bool
+     */
+    public static function isBonusablePeriod(string $period): bool
+    {
+        return in_array($period, self::getBonusablePeriods(), true);
+    }
+
+    /**
+     * 清洗赠送时长配置：剔除非支持周期、空值与 0，超出上限截断；空结果返回 null（活动下线）
+     * 供 PlanSave 表单与赠送管理插件共用，保证规则一致
+     *
+     * @param array|null $bonuses
+     * @return array|null
+     */
+    public static function cleanBonusesConfig(?array $bonuses): ?array
+    {
+        $cleaned = [];
+
+        foreach ($bonuses ?? [] as $period => $months) {
+            if (self::isBonusablePeriod($period) && is_numeric($months)) {
+                $numericMonths = (int) $months;
+                if ($numericMonths > 0) {
+                    $cleaned[$period] = min($numericMonths, self::MAX_BONUS_MONTHS);
+                }
+            }
+        }
+
+        return empty($cleaned) ? null : $cleaned;
+    }
+
+    /**
+     * 获取指定周期赠送的月数
+     *
+     * @param string $period
+     * @return int
+     */
+    public function getBonusMonths(string $period): int
+    {
+        if (!self::isBonusablePeriod($period)) {
+            return 0;
+        }
+
+        return max(0, (int) ($this->bonuses[$period] ?? 0));
+    }
+
+    /**
+     * 设置指定周期的赠送月数
+     *
+     * @param string $period
+     * @param int $months
+     * @return void
+     * @throws InvalidArgumentException
+     */
+    public function setBonusMonths(string $period, int $months): void
+    {
+        if (!self::isBonusablePeriod($period)) {
+            throw new InvalidArgumentException("Period does not support bonus: {$period}");
+        }
+
+        $bonuses = $this->bonuses ?? [];
+        $bonuses[$period] = max(0, min($months, self::MAX_BONUS_MONTHS));
+        $this->bonuses = $bonuses;
+    }
+
+    /**
      * 获取所有已设置价格的周期
      *
      * @return array
@@ -243,6 +334,7 @@ class Plan extends Model
                 $priceList[$period] = [
                     'period' => $periods[$period],
                     'price' => $price,
+                    'bonus_months' => $this->getBonusMonths($period),
                     'average_price' => $periods[$period]['value'] > 0
                         ? round($price / $periods[$period]['value'], 2)
                         : $price

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $plan_id
  * @property int|null $payment_id
  * @property string $period
+ * @property int $bonus_months 赠送月数(下单时快照)
  * @property string $trade_no
  * @property int $total_amount
  * @property int|null $handling_amount
@@ -50,7 +51,8 @@ class Order extends Model
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',
         'surplus_order_ids' => 'array',
-        'handling_amount' => 'integer'
+        'handling_amount' => 'integer',
+        'bonus_months' => 'integer'
     ];
 
     const STATUS_PENDING = 0; // 待支付

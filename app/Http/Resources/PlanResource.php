@@ -26,6 +26,7 @@ class PlanResource extends JsonResource
             'tags' => $this->resource['tags'],
             'content' => $this->formatContent(),
             ...$this->getPeriodPrices(),
+            'bonuses' => $this->getBonuses(),
             'capacity_limit' => $this->getFormattedCapacityLimit(),
             'transfer_enable' => $this->resource['transfer_enable'],
             'speed_limit' => $this->resource['speed_limit'],
@@ -56,6 +57,22 @@ class PlanResource extends JsonResource
                         : null
                 ];
             })
+            ->all();
+    }
+
+    /**
+     * Get bonus months per period using legacy keys (e.g. {"year_price": 6} 表示买年付送6个月)
+     * 与用户端价格键（month_price 等）保持一致，方便主题直接取用
+     *
+     * @return array<string, int>
+     */
+    protected function getBonuses(): array
+    {
+        return collect($this->resource['bonuses'] ?? [])
+            ->filter(fn($months, $period) => Plan::isBonusablePeriod($period) && (int) $months > 0)
+            ->mapWithKeys(fn($months, $period) => [
+                PlanService::convertToLegacyPeriod($period) => (int) $months
+            ])
             ->all();
     }
 

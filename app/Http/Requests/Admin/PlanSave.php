@@ -30,6 +30,8 @@ class PlanSave extends FormRequest
             'transfer_enable' => 'integer|required|min:1',
             'prices' => 'nullable|array',
             'prices.*' => 'nullable|numeric|min:0',
+            'bonuses' => 'nullable|array',
+            'bonuses.*' => 'nullable|integer|min:0|max:' . Plan::MAX_BONUS_MONTHS,
             'group_id' => 'integer|nullable',
             'speed_limit' => 'integer|nullable|min:0',
             'device_limit' => 'integer|nullable|min:0',
@@ -45,6 +47,7 @@ class PlanSave extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $this->validatePrices($validator);
+            $this->validateBonuses($validator);
         });
     }
 
@@ -93,6 +96,28 @@ class PlanSave extends FormRequest
     }
 
     /**
+     * 验证赠送时长配置
+     */
+    protected function validateBonuses(Validator $validator): void
+    {
+        $bonuses = $this->input('bonuses', []);
+
+        if (empty($bonuses)) {
+            return;
+        }
+
+        foreach ($bonuses as $period => $months) {
+            // 验证周期是否支持赠送时长
+            if (!Plan::isBonusablePeriod($period)) {
+                $validator->errors()->add(
+                    "bonuses.{$period}",
+                    "该订阅周期不支持赠送时长: {$period}"
+                );
+            }
+        }
+    }
+
+    /**
      * 处理验证后的数据
      */
     protected function passedValidation(): void
@@ -117,6 +142,29 @@ class PlanSave extends FormRequest
     }
 
     /**
+     * 获取验证后的数据
+     * 注意：FormRequest::validated() 返回的是校验器快照数据，
+     * passedValidation 中的 merge 不会反映到 validated()，因此 bonuses 清洗必须在此进行。
+     */
+    public function validated($key = null, $default = null)
+    {
+        $validated = parent::validated();
+
+        // 仅当请求携带 bonuses 键时归一化（未携带则不干预，
+        // 避免尚未适配的管理面板保存套餐时静默清空赠送配置；
+        // 显式传 null 或空数组才会清空赠送，即活动下线）
+        if (array_key_exists('bonuses', $validated)) {
+            $validated['bonuses'] = Plan::cleanBonusesConfig($validated['bonuses']);
+        }
+
+        if ($key !== null) {
+            return data_get($validated, $key, $default);
+        }
+
+        return $validated;
+    }
+
+    /**
      * Get custom error messages for validator errors.
      */
     public function messages(): array
@@ -130,6 +178,10 @@ class PlanSave extends FormRequest
             'prices.array' => '价格配置格式错误',
             'prices.*.numeric' => '价格必须是数字',
             'prices.*.min' => '价格不能为负数',
+            'bonuses.array' => '赠送时长配置格式错误',
+            'bonuses.*.integer' => '赠送月数必须是整数',
+            'bonuses.*.min' => '赠送月数不能为负数',
+            'bonuses.*.max' => '赠送月数不能超过' . Plan::MAX_BONUS_MONTHS . '个月',
             'group_id.integer' => '权限组ID必须是整数',
             'speed_limit.integer' => '速度限制必须是整数',
             'speed_limit.min' => '速度限制不能为负数',

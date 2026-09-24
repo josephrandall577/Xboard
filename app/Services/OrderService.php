@@ -86,6 +86,7 @@ class OrderService
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'period' => $newPeriod,
+                'bonus_months' => $plan->getBonusMonths($newPeriod),
                 'trade_no' => Helper::generateOrderNo(),
                 'total_amount' => (int) (optional($plan->prices)[$newPeriod] * 100),
             ]);
@@ -297,7 +298,7 @@ class OrderService
             }
 
             $orderAmountSum = $orders->sum(fn($item) => $item->total_amount + $item->balance_amount + $item->surplus_amount - $item->surplus_credit);
-            $orderMonthSum = $orders->sum(fn($item) => self::STR_TO_TIME[PlanService::getPeriodKey($item->period)] ?? 0);
+            $orderMonthSum = $orders->sum(fn($item) => (self::STR_TO_TIME[PlanService::getPeriodKey($item->period)] ?? 0) + (int) ($item->bonus_months ?? 0));
             $firstOrderAt = $orders->min('created_at');
             $expiredAt = Carbon::createFromTimestamp($firstOrderAt)->addMonths($orderMonthSum);
 
@@ -417,7 +418,7 @@ class OrderService
             app(TrafficResetService::class)->performReset($this->user, TrafficResetLog::SOURCE_ORDER);
         $this->user->plan_id = $plan->id;
         $this->user->group_id = $plan->group_id;
-        $this->user->expired_at = $this->getTime($order->period, $this->user->expired_at);
+        $this->user->expired_at = $this->getTime($order->period, $this->user->expired_at, (int) ($order->bonus_months ?? 0));
     }
 
     private function buyByOneTime(Plan $plan)
@@ -432,17 +433,18 @@ class OrderService
     /**
      * 计算套餐到期时间
      * @param string $periodKey
-     * @param int $timestamp
+     * @param int|null $timestamp
+     * @param int $bonusMonths 赠送月数（快照在订单上）
      * @return int
      * @throws ApiException
      */
-    private function getTime(string $periodKey, ?int $timestamp = null): int
+    private function getTime(string $periodKey, ?int $timestamp = null, int $bonusMonths = 0): int
     {
         $timestamp = $timestamp < time() ? time() : $timestamp;
         $periodKey = PlanService::getPeriodKey($periodKey);
 
         if (isset(self::STR_TO_TIME[$periodKey])) {
-            $months = self::STR_TO_TIME[$periodKey];
+            $months = self::STR_TO_TIME[$periodKey] + max(0, $bonusMonths);
             return Carbon::createFromTimestamp($timestamp)->addMonths($months)->timestamp;
         }
 

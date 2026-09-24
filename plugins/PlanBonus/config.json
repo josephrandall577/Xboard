@@ -1,0 +1,11 @@
+{
+    "name": "套餐赠送时长管理",
+    "code": "plan-bonus",
+    "version": "1.0.0",
+    "description": "为订阅套餐配置按周期赠送时长（如买年付送 6 个月）。启用本插件后，请在浏览器直接访问 /plan-bonus 打开赠送管理页面（使用管理员账号的登录票据调用接口，页面会有引导）。",
+    "author": "XBoard",
+    "type": "feature",
+    "require": {
+        "xboard": ">=1.0.0"
+    }
+}
