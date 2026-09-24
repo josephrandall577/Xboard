@@ -112,6 +112,40 @@
     return v;
   }
 
+  // 管理面板 token 的已知存储键（Xboard admin bundle: prefix Xboard_ + access_token）
+  var ADMIN_TOKEN_STORAGE_KEYS = ['Xboard_access_token', 'access_token'];
+
+  // 从任意 localStorage 值中提取候选 token：
+  // 支持原始 Bearer 串、裸 token、以及 JSON 包装（如带过期时间的 {value, expire} 结构）
+  function extractTokensFromValue(v) {
+    var out = [];
+    if (!v) return out;
+    var m = v.match(/Bearer\s+[A-Za-z0-9.\-_~+/=]{20,}/g);
+    if (m) out = out.concat(m);
+    if (typeof v === 'string') {
+      if (/^[\w\-.]{20,}$/.test(v)) out.push(v);
+      try {
+        v = JSON.parse(v);
+      } catch (e) { return out; }
+    }
+    var walk = function (o) {
+      if (!o) return;
+      if (typeof o === 'string') {
+        var mm = o.match(/Bearer\s+[A-Za-z0-9.\-_~+/=]{20,}/g);
+        if (mm) { out = out.concat(mm); return; }
+        if (/^[\w\-.]{20,}$/.test(o)) out.push(o);
+        return;
+      }
+      if (typeof o === 'object') {
+        for (var k in o) {
+          if (/token|auth|value/i.test(k)) walk(o[k]);
+        }
+      }
+    };
+    walk(v);
+    return out;
+  }
+
   function collectTokenCandidates() {
     var candidates = [];
     var seen = {};
@@ -121,12 +155,21 @@
     }
     try {
       add(localStorage.getItem(TOKEN_KEY));
+      ADMIN_TOKEN_STORAGE_KEYS.forEach(function (k) {
+        extractTokensFromValue(localStorage.getItem(k)).forEach(add);
+      });
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
         var v = (localStorage.getItem(k) || '').trim();
         if (!v) continue;
-        if (/^Bearer\s+\S+$/i.test(v)) add(v);
-        else if (/token|auth/i.test(k) && /^[\w\-.]{20,}$/.test(v)) add(v);
+        if (/^Bearer\s+\S+$/i.test(v)) { add(v); continue; }
+        if (/token|auth/i.test(k)) {
+          if (/^[\w\-.]{20,}$/.test(v)) add(v);
+          extractTokensFromValue(v).forEach(add);
+          continue;
+        }
+        // 兼容未来 bundle 键名变化：全量扫描 JSON 包装的值
+        extractTokensFromValue(v).forEach(add);
       }
     } catch (e) {}
     return candidates;
