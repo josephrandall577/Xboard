@@ -192,7 +192,7 @@ class OrderService
         $order = $this->order;
         if ($order->period === Plan::PERIOD_RESET_TRAFFIC) {
             $order->type = Order::TYPE_RESET_TRAFFIC;
-        } else if ($user->plan_id !== NULL && $order->plan_id !== $user->plan_id && ($user->expired_at > time() || $user->expired_at === NULL)) {
+        } else if ($user->plan_id !== NULL && ($user->expired_at > time() || $user->expired_at === NULL) && $this->isSubscriptionChange($user, $order)) {
             if (!(int) admin_setting('plan_change_enable', 1))
                 throw new ApiException('目前不允许更改订阅，请联系客服或提交工单操作');
             $order->type = Order::TYPE_UPGRADE;
@@ -209,6 +209,40 @@ class OrderService
         } else { // 新购
             $order->type = Order::TYPE_NEW_PURCHASE;
         }
+    }
+
+    /**
+     * 判断是否为订阅变更（换购）：
+     * 1. 更换了套餐
+     * 2. 同一周期性套餐切换计费周期（如月付 → 年付），同样触发折抵
+     */
+    private function isSubscriptionChange(User $user, Order $order): bool
+    {
+        if ($order->plan_id !== $user->plan_id) {
+            return true;
+        }
+
+        // 仅周期性订单参与周期比较（一次性套餐维持原有逻辑）
+        if (!isset(self::STR_TO_TIME[$order->period])) {
+            return false;
+        }
+
+        $currentPeriod = $this->getCurrentPeriodKey($user);
+        return $currentPeriod !== null && $currentPeriod !== $order->period;
+    }
+
+    /**
+     * 获取用户当前订阅的计费周期（取最近一次已完成的周期性订单）
+     */
+    private function getCurrentPeriodKey(User $user): ?string
+    {
+        $period = Order::where('user_id', $user->id)
+            ->where('status', Order::STATUS_COMPLETED)
+            ->whereNotIn('period', [Plan::PERIOD_ONETIME, Plan::PERIOD_RESET_TRAFFIC])
+            ->latest('id')
+            ->value('period');
+
+        return $period === null ? null : PlanService::getPeriodKey($period);
     }
 
     public function setVipDiscount(User $user)

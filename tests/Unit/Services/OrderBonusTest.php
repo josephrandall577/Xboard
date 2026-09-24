@@ -163,6 +163,70 @@ class OrderBonusTest extends TestCase
         $this->assertSame(20000 - $upgradeOrder->surplus_amount, $upgradeOrder->total_amount);
     }
 
+    public function test_same_plan_period_change_is_upgrade_and_deducts_surplus_value(): void
+    {
+        $plan = $this->makePlan([
+            'prices' => [Plan::PERIOD_MONTHLY => 100, Plan::PERIOD_YEARLY => 1000],
+        ]);
+
+        // 用户 6 个月前买了该套餐年付，到期时间 = 首单时间 + 12 个月
+        $firstOrderAt = Carbon::now()->subMonths(6);
+        $user = $this->makeUser([
+            'plan_id' => $plan->id,
+            'group_id' => $plan->group_id,
+            'expired_at' => $firstOrderAt->copy()->addMonths(12)->timestamp,
+            'transfer_enable' => 1111 * 1073741824,
+        ]);
+
+        $this->makeOrder($user, $plan, [
+            'period' => Plan::PERIOD_YEARLY,
+            'total_amount' => 100000,
+            'status' => Order::STATUS_COMPLETED,
+            'created_at' => $firstOrderAt->timestamp,
+            'updated_at' => $firstOrderAt->timestamp,
+        ]);
+
+        // 同一套餐年付 → 月付，视为换购并触发折抵
+        $changeOrder = OrderService::createFromRequest($user, $plan, Plan::PERIOD_MONTHLY);
+
+        $this->assertSame(Order::TYPE_UPGRADE, $changeOrder->type);
+        // 剩余 6 / 12 个月 → 折抵 100000 * 1/2 ≈ 50000（按秒折算，日历月天数不同存在偏差）
+        $this->assertEqualsWithDelta(50000, $changeOrder->surplus_amount, 500);
+        // 月付 100 元（10000 分）被折抵金额完全覆盖，溢出部分转为余额 credit
+        $this->assertSame(0, $changeOrder->total_amount);
+        $this->assertSame($changeOrder->surplus_amount - 10000, $changeOrder->surplus_credit);
+    }
+
+    public function test_same_plan_same_period_remains_renewal_without_surplus(): void
+    {
+        $plan = $this->makePlan([
+            'prices' => [Plan::PERIOD_MONTHLY => 100, Plan::PERIOD_YEARLY => 1000],
+        ]);
+
+        $firstOrderAt = Carbon::now()->subMonths(6);
+        $user = $this->makeUser([
+            'plan_id' => $plan->id,
+            'group_id' => $plan->group_id,
+            'expired_at' => $firstOrderAt->copy()->addMonths(12)->timestamp,
+            'transfer_enable' => 1111 * 1073741824,
+        ]);
+
+        $this->makeOrder($user, $plan, [
+            'period' => Plan::PERIOD_YEARLY,
+            'total_amount' => 100000,
+            'status' => Order::STATUS_COMPLETED,
+            'created_at' => $firstOrderAt->timestamp,
+            'updated_at' => $firstOrderAt->timestamp,
+        ]);
+
+        // 同一套餐同周期（年付 → 年付）仍为续费，不折抵
+        $renewalOrder = OrderService::createFromRequest($user, $plan, Plan::PERIOD_YEARLY);
+
+        $this->assertSame(Order::TYPE_RENEWAL, $renewalOrder->type);
+        $this->assertEmpty($renewalOrder->surplus_amount);
+        $this->assertSame(100000, $renewalOrder->total_amount);
+    }
+
     private function makeUser(array $overrides = []): User
     {
         return User::create(array_merge([
