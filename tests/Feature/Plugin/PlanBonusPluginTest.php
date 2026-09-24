@@ -137,7 +137,7 @@ class PlanBonusPluginTest extends TestCase
 
     public function test_manage_page_is_served(): void
     {
-        $response = $this->get('/plan-bonus');
+        $response = $this->get('/plugins/plan-bonus');
         $response->assertStatus(200);
         $this->assertStringContainsString('套餐赠送时长管理', $response->getContent());
     }

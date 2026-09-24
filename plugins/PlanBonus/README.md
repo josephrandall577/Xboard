@@ -6,7 +6,7 @@
 
 1. 确保本插件目录位于 `plugins/PlanBonus/`（随仓库分发，已就位）
 2. 登录管理面板 → 插件 → 找到「套餐赠送时长管理」→ 安装并启用
-3. 浏览器直接访问 **`/plan-bonus`** 打开赠送管理页面
+3. 浏览器直接访问 **`/plugins/plan-bonus`** 打开赠送管理页面
 
 > 管理面板 SPA 无法注入菜单（官方 bundle 无扩展点），因此管理页是插件提供的独立页面，请收藏该地址。
 
@@ -33,7 +33,7 @@ plugins/PlanBonus/
 ├── config.json                     # feature 插件声明
 ├── Plugin.php
 ├── routes/
-│   ├── web.php                     # GET /plan-bonus（页面壳，公开）
+│   ├── web.php                     # GET /plugins/plan-bonus（页面壳，公开）
 │   └── api.php                     # /api/plugin/plan-bonus/*（admin 中间件）
 ├── Controllers/PlanBonusController.php
 └── resources/views/manage.blade.php
