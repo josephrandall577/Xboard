@@ -306,7 +306,9 @@ class OrderService
             $nowUserTraffic = Helper::transferToGB($user->transfer_enable);
             if (!$nowUserTraffic)
                 return;
-            $paidTotalAmount = ($lastOneTimeOrder->total_amount + $lastOneTimeOrder->balance_amount);
+            // 一次性套餐可能是通过折抵额度"零元购"的（total_amount 为 0），
+            // 实际对价需计入净折抵额，与周期性分支共用同一计算口径
+            $paidTotalAmount = max(0, $this->netPaidAmount($lastOneTimeOrder));
             if (!$paidTotalAmount)
                 return;
             $trafficUnitPrice = $paidTotalAmount / $nowUserTraffic;
@@ -331,7 +333,7 @@ class OrderService
                 return;
             }
 
-            $orderAmountSum = $orders->sum(fn($item) => $item->total_amount + $item->balance_amount + $item->surplus_amount - $item->surplus_credit);
+            $orderAmountSum = $orders->sum(fn($item) => $this->netPaidAmount($item));
             $orderMonthSum = $orders->sum(fn($item) => (self::STR_TO_TIME[PlanService::getPeriodKey($item->period)] ?? 0) + (int) ($item->bonus_months ?? 0));
             $firstOrderAt = $orders->min('created_at');
             $expiredAt = Carbon::createFromTimestamp($firstOrderAt)->addMonths($orderMonthSum);
@@ -356,6 +358,18 @@ class OrderService
             $order->surplus_amount = (int) max(0, $orderAmountSum * $ratio);
             $order->surplus_order_ids = $orders->pluck('id')->all();
         }
+    }
+
+    /**
+     * 订单实际对价 = 现金支付 + 余额支付 + 净折抵（surplus_amount - surplus_credit）
+     * 一次性与周期性订阅的剩余价值计算共用此口径，避免两处公式漂移
+     */
+    private function netPaidAmount(Order $order): int
+    {
+        return (int) $order->total_amount
+            + (int) $order->balance_amount
+            + (int) $order->surplus_amount
+            - (int) $order->surplus_credit;
     }
 
     public function paid(string $callbackNo)
