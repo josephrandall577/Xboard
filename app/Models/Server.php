@@ -126,7 +126,6 @@ class Server extends Model
         'last_check_at' => 'integer',
         'last_push_at' => 'integer',
         'show' => 'boolean',
-        'admin_only' => 'boolean',
         'enabled' => 'boolean',
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',

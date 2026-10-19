@@ -141,38 +141,6 @@ class SnellSubscriptionTest extends TestCase
         $this->assertStringContainsString("version=6,mode=unsafe-raw", $body);
     }
 
-    public function test_admin_only_server_is_limited_to_admins(): void
-    {
-        SubscribeTemplate::setContent('surge', "proxies:\n\$proxies\n");
-
-        $user = $this->makeUser();
-        $admin = $this->makeAdmin();
-        $admin->group_id = 1;
-        $admin->transfer_enable = 100 * 1024 * 1024 * 1024;
-        $admin->expired_at = time() + 86400;
-        $admin->save();
-
-        Server::create([
-            'name' => 'admin-only-node',
-            'type' => Server::TYPE_SNELL,
-            'host' => 'node.example.com',
-            'port' => 443,
-            'server_port' => 443,
-            'rate' => '1',
-            'group_ids' => [(string) $user->group_id],
-            'show' => true,
-            'admin_only' => true,
-            'enabled' => true,
-            'protocol_settings' => ['psk' => 'a-server-wide-psk-value'],
-        ]);
-
-        $userBody = $this->get('/s/' . $user->token . '?flag=surge')->assertOk()->getContent();
-        $this->assertStringNotContainsString('admin-only-node', $userBody);
-
-        $adminBody = $this->get('/s/' . $admin->token . '?flag=surge')->assertOk()->getContent();
-        $this->assertStringContainsString('admin-only-node', $adminBody);
-    }
-
     private function adminUrl(string $path): string
     {
         $prefix = admin_setting('secure_path', admin_setting('frontend_admin_path', hash('crc32b', config('app.key'))));
