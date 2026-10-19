@@ -28,16 +28,15 @@ $edits = [
     // node list filter options
     '{value:iqt.Mieru,label:rqt.find(e=>e.type===iqt.Mieru)?.label,color:sqt[iqt.Mieru]}'
         => '{value:iqt.Mieru,label:rqt.find(e=>e.type===iqt.Mieru)?.label,color:sqt[iqt.Mieru]},{value:iqt.Snell,label:rqt.find(e=>e.type===iqt.Snell)?.label,color:sqt[iqt.Snell]}',
-    // declare the snell schema/component inside the same comma sequence,
-    // right after the registry initializer expression closes
-    'py({})),o5t=({serverType:e,value:t,onChange:n})=>' =>
-        'py({})),p_snellSchema=py({psk:cy().min(12).max(255).default(""),version:yy().default(6),mode:cy().default("default")}),'
+    // declare the snell schema/component before the registry that uses them
+    '}),s5t=((e,t)=>({' =>
+        '}),p_snellSchema=py({psk:cy().min(12).max(255).default(""),version:yy().default(6),mode:cy().default("default")}),'
         . 'p_snellForm=({form:e,t:t})=>{const n={default:"default",unshaped:"unshaped","unsafe-raw":"unsafe-raw"};'
         . 'return Q.jsxs(Q.Fragment,{children:['
         . 'Q.jsx($y,{control:e.control,name:"psk",render:({field:e})=>Q.jsxs(Gy,{children:[Q.jsx(Zy,{className:"text-[12px] font-mono text-foreground/80",children:"PSK"}),Q.jsx(Yy,{children:Q.jsx(u8e,{className:"font-mono text-xs",placeholder:"12-255 characters",...e})})]})}),'
         . 'Q.jsx($y,{control:e.control,name:"version",render:({field:e})=>Q.jsxs(Gy,{children:[Q.jsx(Zy,{className:"text-[12px] font-mono text-foreground/80",children:"Version"}),Q.jsx(Yy,{children:Q.jsx(u8e,{type:"number",className:"font-mono text-xs",...e,onChange:t=>e.onChange(Number(t.target.value))})})]})}),'
         . 'Q.jsx($y,{control:e.control,name:"mode",render:({field:e})=>Q.jsxs(Gy,{children:[Q.jsx(Zy,{className:"text-[12px] font-mono text-foreground/80",children:"Mode"}),Q.jsx(Yy,{children:Q.jsxs(yzt,{onValueChange:e.onChange,value:e.value,children:[Q.jsx(Czt,{className:"font-mono text-xs",children:Q.jsx(wzt,{placeholder:"default"})}),Q.jsx(Nzt,{hideWhenDetached:!0,children:Q.jsx(xzt,{children:Object.keys(n).map(e=>Q.jsx(Lzt,{value:e,children:n[e]},e))})})]})})]})})'
-        . ']})},o5t=({serverType:e,value:t,onChange:n})=>',
+        . ']})},s5t=((e,t)=>({',
 ];
 
 foreach ($edits as $from => $to) {
