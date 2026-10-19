@@ -30,7 +30,7 @@ $edits = [
         => '{value:iqt.Mieru,label:rqt.find(e=>e.type===iqt.Mieru)?.label,color:sqt[iqt.Mieru]},{value:iqt.Snell,label:rqt.find(e=>e.type===iqt.Snell)?.label,color:sqt[iqt.Snell]}',
     // declare the snell schema/component before the registry that uses them
     '}),s5t=((e,t)=>({' =>
-        '}),p_snellSchema=py({psk:cy().min(12).max(255).default(""),version:yy().default(6),mode:cy().default("default")}),'
+        '}),p_snellSchema=py({psk:cy().default(""),version:yy().default(6),mode:cy().default("default")}),'
         . 'p_snellForm=({form:e,t:t})=>{const n={default:"default",unshaped:"unshaped","unsafe-raw":"unsafe-raw"};'
         . 'return Q.jsxs(Q.Fragment,{children:['
         . 'Q.jsx($y,{control:e.control,name:"psk",render:({field:e})=>Q.jsxs(Gy,{children:[Q.jsx(Zy,{className:"text-[12px] font-mono text-foreground/80",children:"PSK"}),Q.jsx(Yy,{children:Q.jsx(u8e,{className:"font-mono text-xs",placeholder:"12-255 characters",...e})})]})}),'
