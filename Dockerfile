@@ -38,7 +38,13 @@ RUN composer install --no-cache --no-dev --no-security-blocking \
     && chmod -R 775 /www \
     && mkdir -p /data \
     && chown redis:redis /data
-    
+
+# The admin UI ships as a prebuilt submodule without Snell; patch it until
+# upstream includes the type. Idempotent and safe on missing bundles.
+RUN for bundle in public/assets/admin/assets/index-*.js; do \
+        [ -f "$bundle" ] && php scripts/patch-admin-snell.php "$bundle"; \
+    done
+
 ENV ENABLE_WEB=true \
     ENABLE_HORIZON=true \
     ENABLE_REDIS=true \

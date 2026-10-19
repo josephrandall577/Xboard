@@ -26,6 +26,9 @@ rm -rf composer.lock composer.phar
 wget https://github.com/composer/composer/releases/latest/download/composer.phar -O composer.phar
 php composer.phar update -vvv
 git submodule update --init --recursive --force
+for bundle in public/assets/admin/assets/index-*.js; do
+  [ -f "$bundle" ] && php scripts/patch-admin-snell.php "$bundle"
+done
 php artisan xboard:update
 
 if [ -f "/etc/init.d/bt" ] || [ -f "/.dockerenv" ]; then
