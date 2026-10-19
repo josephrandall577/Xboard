@@ -21,6 +21,7 @@ class Surge extends AbstractProtocol
         Server::TYPE_ANYTLS,
         Server::TYPE_SOCKS,
         Server::TYPE_HTTP,
+        Server::TYPE_SNELL,
     ];
     protected $protocolRequirements = [
         'surge.hysteria.protocol_settings.version' => [2 => '2398'],
@@ -73,6 +74,10 @@ class Surge extends AbstractProtocol
             }
             if ($item['type'] === Server::TYPE_HTTP) {
                 $proxies .= self::buildHttp($item['password'], $item);
+                $proxyGroup .= $item['name'] . ', ';
+            }
+            if ($item['type'] === Server::TYPE_SNELL) {
+                $proxies .= self::buildSnell($item['password'], $item);
                 $proxyGroup .= $item['name'] . ', ';
             }
         }
@@ -202,6 +207,28 @@ class Surge extends AbstractProtocol
         if (data_get($protocol_settings, 'tls_settings.allow_insecure', false)) {
             $config[] = 'skip-cert-verify=true';
         }
+        $config = array_filter($config);
+        $uri = implode(',', $config);
+        $uri .= "\r\n";
+        return $uri;
+    }
+
+    //参考文档: https://manual.nssurge.com/policies/snell.html
+    public static function buildSnell($psks, $server)
+    {
+        $protocol_settings = data_get($server, 'protocol_settings', []);
+        // Surge's Snell policy carries a single key, so the per-user key is
+        // the whole psk (the node maps it back to the user).
+        $config = [
+            "{$server['name']} = snell",
+            "{$server['host']}",
+            "{$server['port']}",
+            "psk={$psks}",
+            'version=' . (int) data_get($protocol_settings, 'version', 6),
+            'mode=' . data_get($protocol_settings, 'mode', 'default'),
+            'tfo=true',
+            'udp-relay=true',
+        ];
         $config = array_filter($config);
         $uri = implode(',', $config);
         $uri .= "\r\n";

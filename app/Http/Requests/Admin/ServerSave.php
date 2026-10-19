@@ -107,6 +107,11 @@ class ServerSave extends FormRequest
             'alpn' => 'nullable|string',
             'padding_scheme' => 'nullable|array',
         ],
+        'snell' => [
+            'psk' => 'nullable|string|min:12|max:255',
+            'version' => 'nullable|integer|in:6',
+            'mode' => 'nullable|string|in:default,unshaped,unsafe-raw',
+        ],
     ];
 
     private function getBaseRules(): array
