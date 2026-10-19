@@ -51,3 +51,20 @@ foreach ($edits as $from => $to) {
 
 file_put_contents($bundle, $s);
 echo "patched $bundle\n";
+
+// Content-hash the bundle and repoint index.html/manifest.json at it, so
+// CDN/browser caches cannot keep serving the pre-patch copy.
+$dir = dirname($bundle);
+$base = basename($bundle);
+$hashed = preg_match('/^index-[0-9a-f]{10}\.js$/i', $base);
+$newBase = 'index-' . substr(hash_file('sha256', $bundle), 0, 10) . '.js';
+if (!$hashed && $newBase !== $base) {
+    $new = "$dir/$newBase";
+    rename($bundle, $new);
+    foreach ([dirname($dir) . '/index.html', dirname($dir) . '/manifest.json'] as $file) {
+        if (is_file($file)) {
+            file_put_contents($file, str_replace($base, $newBase, file_get_contents($file)));
+        }
+    }
+    echo "cache-busted -> $newBase\n";
+}
