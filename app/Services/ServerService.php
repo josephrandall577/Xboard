@@ -56,6 +56,7 @@ class ServerService
     {
         $servers = Server::whereJsonContains('group_ids', (string) $user->group_id)
             ->where('show', true)
+            ->when(!$user->is_admin, fn($query) => $query->where('admin_only', false))
             ->where(function ($query) {
                 $query->whereNull('transfer_enable')
                     ->orWhere('transfer_enable', 0)

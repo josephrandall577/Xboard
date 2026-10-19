@@ -121,6 +121,7 @@ class ServerSave extends FormRequest
             'spectific_key' => 'nullable|string',
             'code' => 'nullable|string',
             'show' => '',
+            'admin_only' => 'nullable|boolean',
             'name' => 'required|string',
             'group_ids' => 'nullable|array',
             'route_ids' => 'nullable|array',
