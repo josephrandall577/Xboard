@@ -324,8 +324,8 @@ class Server extends Model
             ...self::MULTIPLEX_CONFIGURATION,
         ],
         self::TYPE_SNELL => [
-            // `psk` is the server-wide key. Per-user Snell credentials derived
-            // from the user uuid travel in the subscription line.
+            // Legacy storage only; xboard-snell v2 authenticates each user with
+            // their unmodified UUID. Never use this field as a credential.
             'psk' => ['type' => 'string', 'default' => null],
             'version' => ['type' => 'integer', 'default' => 6],
             'mode' => ['type' => 'string', 'default' => 'default'],

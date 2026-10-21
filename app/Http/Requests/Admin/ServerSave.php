@@ -110,7 +110,7 @@ class ServerSave extends FormRequest
         'snell' => [
             'psk' => 'nullable|string|min:12|max:255',
             'version' => 'nullable|integer|in:6',
-            'mode' => 'nullable|string|in:default,unshaped,unsafe-raw',
+            'mode' => 'nullable|string|in:default',
         ],
     ];
 
@@ -229,6 +229,22 @@ class ServerSave extends FormRequest
             $result[$prefix . $field] = $rule;
         }
         return $result;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('type') !== Server::TYPE_SNELL) {
+            return;
+        }
+
+        $settings = $this->input('protocol_settings', []);
+        if (!is_array($settings)) {
+            return;
+        }
+
+        $settings['version'] ??= 6;
+        $settings['mode'] ??= 'default';
+        $this->merge(['protocol_settings' => $settings]);
     }
 
     public function rules(): array

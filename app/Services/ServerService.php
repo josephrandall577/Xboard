@@ -87,7 +87,7 @@ class ServerService
      * @param array $groupIds
      * @return Collection
      */
-    public static function getAvailableUsers(Server $node)
+    public static function getAvailableUsers(Server $node): Collection
     {
         $groupIds = $node->group_ids ?? [];
         if (empty($groupIds)) {
@@ -108,7 +108,13 @@ class ServerService
                 'device_limit'
             ])
             ->get();
-        return HookManager::filter('server.users.get', $users, $node);
+        // Collection filters can preserve sparse keys; full snapshots must
+        // serialize as JSON arrays, including an empty revocation snapshot.
+        $users = HookManager::filter('server.users.get', $users, $node);
+        if (!$users instanceof Collection && !is_array($users)) {
+            throw new \UnexpectedValueException('server.users.get must return a user collection or array');
+        }
+        return collect($users)->values();
     }
 
     // 获取路由规则
@@ -264,6 +270,11 @@ class ServerService
         ];
 
         $response = match ($nodeType) {
+            'snell' => [
+                ...$baseConfig,
+                'version' => 6,
+                'mode' => 'default',
+            ],
             'shadowsocks' => [
                 ...$baseConfig,
                 'cipher' => $protocolSettings['cipher'],

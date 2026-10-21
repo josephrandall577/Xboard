@@ -49,12 +49,14 @@ class SingBoxSnellSubscriptionTest extends TestCase
         // the Surge subscription line.
         $this->assertSame($user->uuid, $snell['psk']);
         $this->assertSame('default', $snell['mode']);
+        $this->assertArrayNotHasKey('userkey', $snell);
+        $this->assertArrayNotHasKey('client_id', $snell);
 
         $selector = $this->findOutbound($outbounds, 'proxy');
         $this->assertContains('snell-node', $selector['outbounds']);
     }
 
-    public function test_singbox_subscription_honours_snell_mode(): void
+    public function test_singbox_subscription_normalizes_legacy_snell_mode(): void
     {
         $user = $this->makeUser();
         $server = $this->makeSnellServer($user);
@@ -64,7 +66,9 @@ class SingBoxSnellSubscriptionTest extends TestCase
         $body = $this->get('/s/' . $user->token . '?flag=sing-box/1.14.0')->assertOk()->json();
         $snell = $this->findOutbound($body['outbounds'], 'snell-node');
 
-        $this->assertSame('unsafe-raw', $snell['mode']);
+        $this->assertSame('default', $snell['mode']);
+        $this->assertSame(6, $snell['version']);
+        $this->assertSame($user->uuid, $snell['psk']);
     }
 
     public function test_singbox_older_than_1_14_does_not_receive_snell_node(): void
@@ -77,6 +81,25 @@ class SingBoxSnellSubscriptionTest extends TestCase
             ->json('outbounds');
 
         $this->assertNull($this->findOutbound($outbounds, 'snell-node'));
+    }
+
+    public function test_singbox_cached_template_keeps_two_users_and_uuid_rotation_isolated(): void
+    {
+        $first = $this->makeUser();
+        $second = $this->makeUser();
+        $this->makeSnellServer($first);
+        foreach ([$first, $second, $first, $second] as $user) {
+            $outbounds = $this->get('/s/' . $user->token . '?flag=sing-box/1.14.0')
+                ->assertOk()->json('outbounds');
+            $snell = $this->findOutbound($outbounds, 'snell-node');
+            $this->assertSame($user->uuid, $snell['psk']);
+            $this->assertSame('node.example.com', $snell['server']);
+            $this->assertSame(443, $snell['server_port']);
+        }
+        $first->update(['uuid' => '33333333-3333-4333-8333-333333333333']);
+        $outbounds = $this->get('/s/' . $first->token . '?flag=sing-box/1.14.0')
+            ->assertOk()->json('outbounds');
+        $this->assertSame($first->uuid, $this->findOutbound($outbounds, 'snell-node')['psk']);
     }
 
     public function test_hiddify_does_not_receive_snell_as_its_core_is_assumed_pre_1_14(): void

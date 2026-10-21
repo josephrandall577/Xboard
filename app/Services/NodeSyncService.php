@@ -64,6 +64,14 @@ class NodeSyncService
             if (!self::isNodeOnline($server->id))
                 continue;
 
+            // xboard-snell v2 applies full snapshots; it does not apply deltas.
+            if ($server->type === Server::TYPE_SNELL) {
+                self::push($server->id, 'sync.users', [
+                    'users' => ServerService::getAvailableUsers($server)->toArray(),
+                ]);
+                continue;
+            }
+
             if ($user->isAvailable()) {
                 self::push($server->id, 'sync.user.delta', [
                     'action' => 'add',
@@ -96,6 +104,13 @@ class NodeSyncService
         foreach ($servers as $server) {
             if (!self::isNodeOnline($server->id))
                 continue;
+
+            if ($server->type === Server::TYPE_SNELL) {
+                self::push($server->id, 'sync.users', [
+                    'users' => ServerService::getAvailableUsers($server)->toArray(),
+                ]);
+                continue;
+            }
 
             self::push($server->id, 'sync.user.delta', [
                 'action' => 'remove',

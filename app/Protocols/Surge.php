@@ -216,7 +216,6 @@ class Surge extends AbstractProtocol
     //参考文档: https://manual.nssurge.com/policies/snell.html
     public static function buildSnell($psks, $server)
     {
-        $protocol_settings = data_get($server, 'protocol_settings', []);
         // Surge's Snell policy carries a single key, so the per-user key is
         // the whole psk (the node maps it back to the user).
         $config = [
@@ -224,8 +223,8 @@ class Surge extends AbstractProtocol
             "{$server['host']}",
             "{$server['port']}",
             "psk={$psks}",
-            'version=' . (int) data_get($protocol_settings, 'version', 6),
-            'mode=' . data_get($protocol_settings, 'mode', 'default'),
+            'version=6',
+            'mode=default',
             'tfo=true',
             'udp-relay=true',
         ];

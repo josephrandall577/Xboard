@@ -43,7 +43,7 @@ class SnellSubscriptionTest extends TestCase
             'protocol_settings' => [
                 'psk' => 'a-server-wide-psk-value',
                 'version' => 6,
-                'mode' => 'unshaped',
+                'mode' => 'default',
             ],
         ]);
 
@@ -51,7 +51,7 @@ class SnellSubscriptionTest extends TestCase
         $server = Server::where('name', 'snell-node')->firstOrFail();
         $this->assertSame('snell', $server->type);
         $this->assertSame(6, $server->protocol_settings['version']);
-        $this->assertSame('unshaped', $server->protocol_settings['mode']);
+        $this->assertSame('default', $server->protocol_settings['mode']);
     }
 
     public function test_admin_save_rejects_invalid_snell_settings(): void
@@ -72,16 +72,18 @@ class SnellSubscriptionTest extends TestCase
             'protocol_settings' => ['version' => 5],
         ])->assertStatus(422);
 
-        $this->postJson($this->adminUrl('server/manage/save'), $payload + [
-            'protocol_settings' => ['mode' => 'turbo'],
-        ])->assertStatus(422);
+        foreach (['turbo', 'unshaped', 'unsafe-raw'] as $mode) {
+            $this->postJson($this->adminUrl('server/manage/save'), $payload + [
+                'protocol_settings' => ['mode' => $mode],
+            ])->assertStatus(422);
+        }
 
         $this->postJson($this->adminUrl('server/manage/save'), $payload + [
             'protocol_settings' => ['psk' => 'short'],
         ])->assertStatus(422);
     }
 
-    public function test_surge_subscription_renders_snell_line_with_user_key(): void
+    public function test_surge_subscription_renders_snell_line_with_user_uuid(): void
     {
         SubscribeTemplate::setContent('surge', "proxies:\n\$proxies\n");
 
@@ -109,13 +111,16 @@ class SnellSubscriptionTest extends TestCase
         $body = $response->getContent();
         // Per-user Snell credential: the panel hands out the user uuid as the
         // psk, which the node maps back to the user.
+        $this->assertStringNotContainsString('a-server-wide-psk-value', $body);
+        $this->assertStringNotContainsString('userkey', $body);
+        $this->assertStringNotContainsString('client_id', $body);
         $this->assertStringContainsString(
             "snell-node = snell,node.example.com,443,psk={$user->uuid},version=6,mode=default,tfo=true,udp-relay=true",
             $body
         );
     }
 
-    public function test_surge_subscription_honours_snell_version_and_mode(): void
+    public function test_surge_subscription_normalizes_legacy_snell_mode(): void
     {
         SubscribeTemplate::setContent('surge', "proxies:\n\$proxies\n");
 
@@ -138,8 +143,53 @@ class SnellSubscriptionTest extends TestCase
 
         $body = $this->get('/s/' . $user->token . '?flag=surge')->assertOk()->getContent();
 
-        // version defaults to 6 when the panel did not store one.
-        $this->assertStringContainsString("version=6,mode=unsafe-raw", $body);
+        // Legacy settings must not reach v2 subscriptions.
+        $this->assertStringContainsString("version=6,mode=default", $body);
+    }
+
+    public function test_admin_save_defaults_missing_and_null_snell_settings(): void
+    {
+        Sanctum::actingAs($this->makeAdmin());
+        foreach ([[], ['version' => null, 'mode' => null]] as $index => $settings) {
+            $this->postJson($this->adminUrl('server/manage/save'), [
+                'name' => 'default-snell-' . $index,
+                'type' => 'snell',
+                'host' => 'node.example.com',
+                'port' => 443,
+                'server_port' => 6160,
+                'rate' => 1,
+                'protocol_settings' => $settings,
+            ])->assertOk();
+            $server = Server::where('name', 'default-snell-' . $index)->firstOrFail();
+            $this->assertSame(6, $server->protocol_settings['version']);
+            $this->assertSame('default', $server->protocol_settings['mode']);
+            $this->assertNull($server->protocol_settings['psk']);
+        }
+    }
+
+    public function test_cached_templates_keep_users_and_rotated_credentials_isolated(): void
+    {
+        SubscribeTemplate::setContent('surge', "proxies:\n\$proxies\n");
+        $first = $this->makeUser();
+        $second = $this->makeUser();
+        Server::create([
+            'name' => 'shared-endpoint', 'type' => 'snell',
+            'host' => 'node.example.com', 'port' => 443, 'server_port' => 6160,
+            'rate' => 1, 'group_ids' => ['1'], 'show' => true,
+            'protocol_settings' => ['psk' => 'legacy-server-secret'],
+        ]);
+        foreach ([$first, $second, $first, $second] as $user) {
+            $other = $user->id === $first->id ? $second : $first;
+            $body = $this->get('/s/' . $user->token . '?flag=surge')->assertOk()->getContent();
+            $this->assertStringContainsString("shared-endpoint = snell,node.example.com,443,psk={$user->uuid},version=6,mode=default", $body);
+            $this->assertStringNotContainsString($other->uuid, $body);
+            $this->assertStringNotContainsString('legacy-server-secret', $body);
+        }
+        $oldUuid = $first->uuid;
+        $first->update(['uuid' => '33333333-3333-4333-8333-333333333333']);
+        $body = $this->get('/s/' . $first->token . '?flag=surge')->assertOk()->getContent();
+        $this->assertStringContainsString("psk={$first->uuid}", $body);
+        $this->assertStringNotContainsString($oldUuid, $body);
     }
 
     private function adminUrl(string $path): string

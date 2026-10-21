@@ -866,20 +866,15 @@ class SingBox extends AbstractProtocol
 
     protected function buildSnell($psk, $server): array
     {
-        $protocol_settings = data_get($server, 'protocol_settings', []);
         $array = [
             'type' => 'snell',
             'tag' => $server['name'],
             'server' => $server['host'],
             'server_port' => $server['port'],
-            'version' => (int) data_get($protocol_settings, 'version', 6),
+            'version' => 6,
             'psk' => $psk,
+            'mode' => 'default',
         ];
-
-        // `mode` only exists in Snell v6; v4 uses obfs_mode/obfs_host instead.
-        if ($array['version'] === 6) {
-            $array['mode'] = data_get($protocol_settings, 'mode', 'default');
-        }
 
         return $array;
     }
