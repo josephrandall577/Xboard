@@ -19,6 +19,7 @@ class SnellSubscriptionTest extends TestCase
         // The panel reads templates/fragments through the redis store; in tests
         // the array driver keeps everything in-process.
         config(['cache.stores.redis' => ['driver' => 'array']]);
+        \Cache::forgetDriver('redis');
     }
 
     public function test_snell_server_is_a_valid_type(): void

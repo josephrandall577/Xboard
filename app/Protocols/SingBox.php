@@ -20,6 +20,7 @@ class SingBox extends AbstractProtocol
         Server::TYPE_ANYTLS,
         Server::TYPE_SOCKS,
         Server::TYPE_HTTP,
+        Server::TYPE_SNELL,
     ];
     private $config;
     const CUSTOM_TEMPLATE_FILE = 'resources/rules/custom.sing-box.json';
@@ -106,6 +107,12 @@ class SingBox extends AbstractProtocol
                     1 => '1.5.0'
                 ]
             ],
+            'snell' => [
+                'base_version' => '1.14.0',
+                'protocol_settings.version' => [
+                    '6' => '1.14.0' // Snell outbound landed in sing-box 1.14.0
+                ]
+            ],
         ]
     ];
 
@@ -176,6 +183,10 @@ class SingBox extends AbstractProtocol
             if ($item['type'] === Server::TYPE_HTTP) {
                 $httpConfig = $this->buildHttp($this->user['uuid'], $item);
                 $proxies[] = $httpConfig;
+            }
+            if ($item['type'] === Server::TYPE_SNELL && !$this->isCoreOlderThan('1.14.0')) {
+                $snellConfig = $this->buildSnell($item['password'], $item);
+                $proxies[] = $snellConfig;
             }
         }
         foreach ($outbounds as &$outbound) {
@@ -365,6 +376,15 @@ class SingBox extends AbstractProtocol
         }
 
         return '1.13.0';
+    }
+
+    /**
+     * 当前内核是否低于指定版本 (版本未知时视为不旧，交给上层判断)
+     */
+    private function isCoreOlderThan(string $minVersion): bool
+    {
+        $coreVersion = $this->getSingBoxCoreVersion();
+        return !empty($coreVersion) && version_compare($coreVersion, $minVersion, '<');
     }
 
     /**
@@ -839,6 +859,26 @@ class SingBox extends AbstractProtocol
                 $array['tls']['server_name'] = $serverName;
             }
             $this->appendEch($array['tls'], data_get($protocol_settings, 'tls_settings.ech'));
+        }
+
+        return $array;
+    }
+
+    protected function buildSnell($psk, $server): array
+    {
+        $protocol_settings = data_get($server, 'protocol_settings', []);
+        $array = [
+            'type' => 'snell',
+            'tag' => $server['name'],
+            'server' => $server['host'],
+            'server_port' => $server['port'],
+            'version' => (int) data_get($protocol_settings, 'version', 6),
+            'psk' => $psk,
+        ];
+
+        // `mode` only exists in Snell v6; v4 uses obfs_mode/obfs_host instead.
+        if ($array['version'] === 6) {
+            $array['mode'] = data_get($protocol_settings, 'mode', 'default');
         }
 
         return $array;
